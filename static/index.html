@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Tracker</title>
+  <style>
+    :root {
+      --bg: #f5f6f8; --card: #fff; --text: #1f2937; --muted: #6b7280;
+      --border: #e5e7eb; --accent: #2563eb; --danger: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+    h1 { margin: 0 0 4px; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+    .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .stat { flex: 1; min-width: 120px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .stat b { display: block; font-size: 24px; }
+    .stat span { color: var(--muted); font-size: 13px; text-transform: capitalize; }
+    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    input, select, button { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; }
+    button { cursor: pointer; background: var(--accent); color: #fff; border: none; }
+    button.delete { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 4px 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 13px; font-weight: 600; }
+    select.status { padding: 4px 8px; font-weight: 600; }
+    .applied { background: #eff6ff; color: #1d4ed8; }
+    .interview { background: #fefce8; color: #a16207; }
+    .offer { background: #f0fdf4; color: #15803d; }
+    .rejected { background: #fef2f2; color: #b91c1c; }
+    .empty { text-align: center; color: var(--muted); padding: 30px; }
+    .error { color: var(--danger); margin-top: 10px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Job Tracker</h1>
+  <p class="subtitle">Keep track of every application in one place.</p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <form id="add-form">
+      <input name="company" placeholder="Company" required>
+      <input name="position" placeholder="Position" required>
+      <input name="date_applied" type="date">
+      <input name="notes" placeholder="Notes (optional)">
+      <button type="submit">Add job</button>
+    </form>
+    <div class="error" id="error"></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Company</th><th>Position</th><th>Applied</th><th>Status</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="jobs"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+  const STATUSES = ["applied", "interview", "offer", "rejected"];
+  const tbody = document.getElementById("jobs");
+  const errorBox = document.getElementById("error");
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  async function api(method, url, body) {
+    const res = await fetch(url, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`${method} ${url} failed (${res.status})`);
+    return res.status === 204 ? null : res.json();
+  }
+
+  function renderStats(jobs) {
+    const counts = { total: jobs.length };
+    STATUSES.forEach(s => counts[s] = jobs.filter(j => j.status === s).length);
+    document.getElementById("stats").innerHTML = Object.entries(counts)
+      .map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
+  }
+
+  function renderJobs(jobs) {
+    renderStats(jobs);
+    if (!jobs.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">No jobs yet. Add your first one above.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = jobs.map(job => `
+      <tr>
+        <td><b>${escapeHtml(job.company)}</b></td>
+        <td>${escapeHtml(job.position)}</td>
+        <td>${escapeHtml(job.date_applied)}</td>
+        <td>
+          <select class="status ${escapeHtml(job.status)}" data-id="${job.id}">
+            ${STATUSES.map(s => `<option value="${s}" ${s === job.status ? "selected" : ""}>${s}</option>`).join("")}
+          </select>
+        </td>
+        <td>${escapeHtml(job.notes)}</td>
+        <td><button class="delete" data-id="${job.id}">Delete</button></td>
+      </tr>`).join("");
+  }
+
+  async function loadJobs() {
+    try {
+      renderJobs(await api("GET", "/jobs"));
+    } catch (e) {
+      errorBox.textContent = e.message;
+    }
+  }
+
+  document.getElementById("add-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    errorBox.textContent = "";
+    const data = Object.fromEntries(new FormData(e.target));
+    if (!data.date_applied) delete data.date_applied;
+    if (!data.notes) delete data.notes;
+    try {
+      await api("POST", "/jobs", data);
+      e.target.reset();
+      loadJobs();
+    } catch (err) {
+      errorBox.textContent = err.message;
+    }
+  });
+
+  tbody.addEventListener("change", async e => {
+    if (!e.target.matches("select.status")) return;
+    try {
+      await api("PATCH", `/jobs/${e.target.dataset.id}`, { status: e.target.value });
+      loadJobs();
+    } catch (err) {
+      errorBox.textContent = err.message;
+    }
+  });
+
+  tbody.addEventListener("click", async e => {
+    if (!e.target.matches("button.delete")) return;
+    if (!confirm("Delete this job?")) return;
+    try {
+      await api("DELETE", `/jobs/${e.target.dataset.id}`);
+      loadJobs();
+    } catch (err) {
+      errorBox.textContent = err.message;
+    }
+  });
+
+  loadJobs();
+</script>
+</body>
+</html>
