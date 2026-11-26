@@ -70,8 +70,12 @@ def create_job(job: JobCreate, session: Session = Depends(get_session)):
 
 
 @app.get("/jobs", response_model=list[Job])
-def list_jobs(session: Session = Depends(get_session)):
-    return session.exec(select(Job)).all()
+def list_jobs(status: Optional[str] = None, session: Session = Depends(get_session)):
+
+    if status is not None:
+        return session.exec(select(Job).where(Job.status == status)).all()
+    else  :
+        return session.exec(select(Job)).all()
 
 
 @app.get("/jobs/{job_id}", response_model=Job)
