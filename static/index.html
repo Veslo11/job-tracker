@@ -54,6 +54,13 @@
   </div>
 
   <div class="card">
+    <select id="filter">
+      <option value="">All</option>
+      <option >applied</option>
+      <option>interview</option>
+      <option>offer</option>
+      <option>rejected</option>
+    </select>
     <table>
       <thead>
         <tr><th>Company</th><th>Position</th><th>Applied</th><th>Status</th><th>Notes</th><th></th></tr>
@@ -112,10 +119,18 @@
 
   async function loadJobs() {
     try {
-      renderJobs(await api("GET", "/jobs"));
+    const status = document.getElementById("filter").value;
+    let url = "/jobs";
+    if(status !== "")
+    {
+      url="/jobs?status="+status;
+    }
+      
+      renderJobs(await api("GET", url));
     } catch (e) {
       errorBox.textContent = e.message;
     }
+    
   }
 
   document.getElementById("add-form").addEventListener("submit", async e => {
@@ -155,6 +170,7 @@
   });
 
   loadJobs();
+  document.getElementById("filter").addEventListener("change", loadJobs);
 </script>
 </body>
 </html>
