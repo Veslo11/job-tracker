@@ -6,15 +6,21 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from enum import Enum
 
 DATABASE_URL = "sqlite:///jobs.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
+class Status(str, Enum):
+    applied="applied"
+    interview="interview"
+    offer="offer"
+    rejected="rejected"
 
 class JobBase(SQLModel):
     company: str
     position: str
-    status: str = "applied"  # applied, interview, offer, rejected
+    status: Status = Status.applied  # applied, interview, offer, rejected
     date_applied: date = Field(default_factory=date.today)
     notes: Optional[str] = None
 
@@ -30,7 +36,7 @@ class JobCreate(JobBase):
 class JobUpdate(SQLModel):
     company: Optional[str] = None
     position: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Status] = None
     date_applied: Optional[date] = None
     notes: Optional[str] = None
 
@@ -70,7 +76,7 @@ def create_job(job: JobCreate, session: Session = Depends(get_session)):
 
 
 @app.get("/jobs", response_model=list[Job])
-def list_jobs(status: Optional[str] = None, session: Session = Depends(get_session)):
+def list_jobs(status: Optional[Status] = None, session: Session = Depends(get_session)):
 
     if status is not None:
         return session.exec(select(Job).where(Job.status == status)).all()
